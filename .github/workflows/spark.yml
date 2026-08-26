@@ -1,0 +1,45 @@
+name: douyin-spark
+
+on:
+  schedule:
+    - cron: '10 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Restore runtime data
+        env:
+          DOUYIN_STATE: ${{ secrets.DOUYIN_STATE }}
+          DOUYIN_CONFIG: ${{ secrets.DOUYIN_CONFIG }}
+        run: |
+          mkdir -p data
+          printf '%s' "$DOUYIN_STATE" | base64 -d > data/douyin_state.json
+          printf '%s' "$DOUYIN_CONFIG" | base64 -d > data/data.json
+
+      - name: Run spark task
+        run: python -m app.run_once
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: data/screenshots/
+          retention-days: 7
